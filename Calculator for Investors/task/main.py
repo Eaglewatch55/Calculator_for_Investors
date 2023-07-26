@@ -1,3 +1,9 @@
+import csv
+from sqlalchemy import Column, Float, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 class Menu:
     def __init__(self, name, options: dict):
         self.menu_name = name
@@ -56,7 +62,7 @@ class MainMenu(Menu):
         self.sub_menus = submenus
 
     def exit_message(self, msg="Have a nice day!"):
-            print(msg)
+        print(msg)
 
 
 class SubMenu(Menu):
@@ -69,6 +75,77 @@ def not_implemented():
     return False
 
 
+engine = create_engine('sqlite:///investor.db')
+Base = declarative_base()
+
+
+
+class Companies(Base):
+    __tablename__ = "companies"
+
+    ticker = Column(String, primary_key=True)
+    name = Column(String, server_default=None)
+    sector = Column(String, server_default=None)
+
+
+class Financial(Base):
+    __tablename__ = "financial"
+
+    ticker = Column(String, primary_key=True)
+    ebitda = Column(Float, server_default=None)
+    sales = Column(Float, server_default=None)
+    net_profit = Column(Float, server_default=None)
+    market_price = Column(Float, server_default=None)
+    net_debt = Column(Float, server_default=None)
+    assets = Column(Float, server_default=None)
+    equity = Column(Float, server_default=None)
+    cash_equivalents = Column(Float, server_default=None)
+    liabilities = Column(Float, server_default=None)
+
+
+def read_csv():
+    def helper(f_name, table_type):
+        to_return = []
+        header = True
+
+        with open(f_name, "r") as f:
+            reader = csv.reader(f)
+
+            for row in reader:
+                if header is True:
+                    header = [i for i in row]
+                    continue
+
+                if "" in row:
+                    for i, data in enumerate(row):
+                        if data == "":
+                            row[i] = None
+
+                # Unpacks a dictionary created with the header and each row to create the object
+                to_return.append(table_type(**dict(zip(header, row))))
+
+            return to_return
+
+    company = helper("test/companies.csv", Companies)
+    financial = helper("test/financial.csv", Financial)
+
+    return company, financial
+
+
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+
+for table in read_csv():
+    for register in table:
+        session.add(register)
+
+session.commit()
+engine.dispose()
+
+print("Database created successfully!")
+
+exit()
 crud_menu = SubMenu("CRUD MENU",
                     {"Back": None,
                      "Create a company": not_implemented,
