@@ -2,6 +2,7 @@ import csv
 from sqlalchemy import Column, Float, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
+from sqlalchemy import desc
 from sqlalchemy.orm import sessionmaker, Query
 from os import path
 
@@ -27,7 +28,7 @@ class Menu:
             print()
             return
 
-        if self.__class__ is not SubMenu and num != 0:
+        if not issubclass(self.__class__, SubMenu) and num != 0:
             print()
 
         return num
@@ -125,10 +126,42 @@ class CompaniesMenu(SubMenu):
         return to_return
 
 
-def not_implemented():
-    print("Not implemented!")
-    print()
-    return False
+class TTMenu(SubMenu):
+    def menu_selection(self):
+        flag = True
+        while flag:
+            print(self.menu_name)
+            selection = self.print_and_select()
+            if selection is None:
+                continue
+            elif selection == 0 or selection is False:
+                self.exit_message()
+                break
+
+            flag = self.menu_options[selection][1](selection)
+
+        return True
+
+    def selection(self):
+
+        print("Enter an option:")
+        try:
+            num = int(input())
+
+        except ValueError:
+            print("Invalid option!")
+            # print()
+            return False
+
+        if num not in self.menu_options.keys():
+            print("Invalid option!")
+            # print()
+            return False
+
+        if not issubclass(self.__class__, SubMenu) and num != 0:
+            print()
+
+        return num
 
 
 Base = declarative_base()
@@ -160,7 +193,6 @@ class Financial(Base):
 engine = create_engine('sqlite:///investor.db', connect_args={'check_same_thread': False})
 
 # Stage 2 - Create database an add data if db doesn't exist
-
 # if created_companies and created_financial:
 if not path.exists("investor.db"):
     def load_csv():
@@ -200,8 +232,6 @@ if not path.exists("investor.db"):
             session.add(register)
 
     session.commit()
-    engine.dispose()
-
     # print("Database created successfully!")
     # exit()
 
@@ -397,33 +427,57 @@ def crud_list_all(eng=engine):
     print()
 
 
-# def top_ten(metric, eng=engine):
-#
-#     match metric:
-#         case 1:
-#             raise NotImplementedError
-#         case 2:
-#             raise NotImplementedError
-#         case 3:
-#             raise NotImplementedError
+def top_ten(metric, eng=engine):
+    Session = sessionmaker(bind=eng)
+    session = Session()
 
+    match metric:
+        case 1:
+            operator = "ND/EBITDA"
+            stmt = (Financial.ticker,
+                    Financial.net_debt,
+                    Financial.ebitda,
+                    (Financial.net_debt / Financial.ebitda).label("operator"))
+        case 2:
+            operator = "ROE"
+            stmt = (Financial.ticker,
+                    Financial.net_profit,
+                    Financial.equity,
+                    (Financial.net_profit / Financial.equity).label("operator"))
+        case 3:
+            operator = "ROA"
+            stmt = (Financial.ticker,
+                    Financial.net_profit,
+                    Financial.assets,
+                    (Financial.net_profit / Financial.assets).label("operator"))
+
+    query = session.query(*stmt).order_by(desc("operator")).limit(10)
+
+    print(f"TICKER {operator}")
+
+    for result in query:
+        print(result.ticker, round(result.operator, 2))
+
+    print()
+
+    session.close()
 
 print("Welcome to the Investor Program!\n")
 
 crud_menu = SubMenu("CRUD MENU",
                     {"Back": None,
-                     "Create a company": crud_create,  # To validate
+                     "Create a company": crud_create,
                      "Read a company": crud_read,
                      "Update a company": crud_update,
                      "Delete a company": crud_delete,
                      "List all companies": crud_list_all}
                     )
 
-top_ten_menu = SubMenu("TOP TEN MENU",
+top_ten_menu = TTMenu("TOP TEN MENU",
                        {"Back": None,
-                        "List by ND/EBITDA": not_implemented,
-                        "List by ROE": not_implemented,
-                        "List by ROA": not_implemented}
+                        "List by ND/EBITDA": top_ten,
+                        "List by ROE": top_ten,
+                        "List by ROA": top_ten}
                        )
 
 main_menu = MainMenu("MAIN MENU",
@@ -435,3 +489,5 @@ main_menu = MainMenu("MAIN MENU",
                      )
 
 main_menu.menu_selection()
+engine.dispose()
+
